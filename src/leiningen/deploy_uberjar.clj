@@ -17,7 +17,9 @@
 (defn repo-target?
   "verify the given repository is defined in the project"
   [project repo]
-  (some #( = repo %) (map #(first %) (:repositories project))))
+  (some #(= repo %)
+        (concat (map first (:deploy-repositories project))
+                (map first (:repositories project)))))
 
 (defn verify-repo [project repo]
   (when-not (repo-target? project repo)
