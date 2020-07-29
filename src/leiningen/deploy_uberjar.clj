@@ -7,6 +7,7 @@
             [leiningen.deploy :as ldeploy]
             [clojure.pprint :refer [pprint]]
             [clojure.string :as string]
+            [leiningen.core.classpath :as classpath]
             [cemerick.pomegranate.aether :as aether])
   (:import [java.util.zip ZipEntry ZipOutputStream]))
 
@@ -66,10 +67,22 @@
          {[:extension "pom"] (lpom/pom project)}
          {[:extension "zip"] uberjar-gz}))
 
+(defn remove-nil-vals [m] (into (empty m) (filter (fn [[_ v]] (some? v))) m))
+
+(defn proxy-settings []
+  (let [proxy-settings (remove-nil-vals (classpath/get-proxy-settings "https_proxy"))]
+    (if (empty? proxy-settings)
+      (let [proxy-settings (remove-nil-vals (classpath/get-proxy-settings))]
+        (if (empty? proxy-settings)
+          nil
+          {:proxy proxy-settings}))
+      {:proxy proxy-settings})))
+
 (defn deploy-uberjar
   "Deploy uberjar to the given repository"
   [{group :group target-path :target-path version :version :as project} & args]
-  (let [repo    (first args)
+  (let [{:keys [proxy]} (proxy-settings)
+        repo    (first args)
         regular-jar (str target-path "/" (find-regular-jar project))
         uberjar (-> project get-uberjar-path)
         uberjar-gz (zip uberjar (str uberjar ".zip"))]
@@ -78,6 +91,7 @@
       (aether/deploy
          :coordinates  [(symbol group (:name project)) version]
          :artifact-map (files-for (assoc project :auto-clean false) repo uberjar-gz)
+         :proxy proxy
          :transfer-listener :stdout
          :repository   [(ldeploy/repo-for project repo)])
       (exit "uberjar does not exist, try lein uberjar first"))))
